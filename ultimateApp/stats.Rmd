@@ -1,0 +1,128 @@
+---
+title: "Krust XIV League Stats: Week 2"
+author: "KRAP"
+date: "`r Sys.Date()`"
+output:
+  html_document: 
+    toc: false
+    toc_depth: 3
+    toc_float: 
+      collapsed: false
+      smooth_scroll: false
+  pdf_document: default
+  
+  
+---
+
+```{r setup, include=FALSE, echo=F}
+knitr::opts_chunk$set(echo = FALSE, inclue=FALSE, warning = F)
+library(tidyverse)
+library(DT)
+library(stringr)
+library(readxl)
+library(janitor)
+library(lubridate)
+library(kableExtra)
+```
+
+
+
+```{r read in data, echo=F}
+
+dat <- read_excel("data/krustStats.xlsx") %>%
+  clean_names("lower_camel") %>%
+   mutate(player=as.factor(player), team=as.factor(team), opponent=as.factor(opponent)) %>%
+  replace(is.na(.), 0)  %>%
+  mutate(date=ymd(date), week=as.integer(week), game=as.integer(game))
+
+
+```
+## Standings
+```{r game summary, echo=F, include=F}
+
+sumGame <- dat %>%
+  group_by(game, team)%>%
+  summarise(gFor=sum(goals), win=ifelse(gFor==11, "winner", "loser"))%>%
+  ungroup()
+
+gamesWider <- sumGame%>%
+  dplyr::select(-team)%>%
+  pivot_wider(names_from = win, values_from = gFor)%>%
+  left_join(sumGame, ., by="game") %>%
+  mutate(gFor=ifelse(win=="winner", winner, loser),
+         gAgainst=ifelse(win=="winner", loser, winner),
+         sumWin=ifelse(win=="winner", 1, 0))
+
+teamTable <- gamesWider %>%
+  group_by(team)%>%
+  summarise(gp=n(), wins=sum(sumWin), gFor=sum(gFor), gA=sum(gAgainst))%>%
+  ungroup() %>%
+  mutate(loss=gp-wins,.after=wins) %>%
+  mutate(diff=gFor-gA,.after=gA) %>%
+  arrange(desc(wins), desc(diff))
+
+
+
+
+```
+
+```{r display team stats}
+
+datatable(teamTable, options = list(dom= 't',
+  
+  pageLength =5),
+  caption="Team Stats",
+          colnames = c("Team", "Games Played", "Wins", "Loss", "Goal For", "Goals Against", "Differential"), rownames = F)
+
+
+
+```
+
+
+## Player Stats
+
+
+```{r summarize player stats, echo=F, include=F}
+
+  
+
+sumPlay <- dat%>%
+
+  mutate(total=rowSums(across(8:14),na.rm=T)) %>%
+  filter(total!=0)%>%
+  group_by(team,player)%>%
+  dplyr::summarize(gp=n(),touches=sum(touches),catches=sum(catches),drops=sum(drops),
+            throwaways=sum(throwaways), assists=sum(assists), goals=sum(goals),
+            ds=sum(ds),  plusMinus=sum(x))%>%
+  mutate(player=as.factor(player), team=as.factor(team)) %>%
+  replace(is.na(.), 0) %>%
+
+  ungroup()
+  
+
+```
+
+```{r player data table, echo=F}
+
+datatable(sumPlay, options = list(
+  
+  pageLength = 11,
+  lengthMenu = c(11, 22, 33, 44, 55)),
+  caption="Summarized Player Stats for the season. Search by player and/or team.",
+          colnames = c("Team", "Player", "Games Played","Touches", "Catches", "Drops", "Throw Aways", "Assists", "Goals", "Ds", "Plus/Minus"), filter = "top" , rownames = F)
+
+```
+### Player Stats by Game
+```{r}
+
+
+datatable(dplyr::select(dat, -time),
+      
+    options = list(
+  
+  pageLength = 11,
+  lengthMenu = c(11, 22, 33, 44, 55)),
+  caption="Player Stats by Game. Search by team, player, and/or game. Also sortable.",
+          colnames = c("Week", "Game", "Date", "Opponent", "Team", "Player", "Touches", "Catches", "Drops", "Throw Aways", "Assists", "Goals", "Ds", "Plus/Minus"), filter = "top" , rownames = F)
+```
+
